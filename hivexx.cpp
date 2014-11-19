@@ -44,6 +44,7 @@ Key::Key(const Node &node, hive_value_h value, const std::string &name)
 	_hive = node._hive;
 	_value = value;
 	_cachedName = name;
+	_cachedPath = str(boost::format("%s\\%s") % node.Name() % name);
 }
 
 Node::Node(hive_h *hive, hive_node_h node, const std::string &name)
@@ -58,7 +59,7 @@ const std::string &Hive::Path() const
 	return _path;
 }
 
-const std::string &Hive::Name() const
+const std::string &Node::Name() const
 {
 	return _cachedName;
 }
@@ -185,19 +186,19 @@ std::vector<Node> Node::GetNodes()
 	return std::move(children);
 }
 
-bool Key::SetValue(int32_t &value)
+bool Key::SetValue(int32_t value)
 {
 	hive_set_value newValue = { const_cast<char *>(_cachedName.data()), hive_t_REG_DWORD, sizeof(int), (char *) &value };
-	logger.Debug("SetValue %s: %i", _cachedName.c_str(), value);
+	logger.Debug("SetValue %s: %i", _cachedPath.c_str(), value);
 	return hivex_node_set_value(_hive, _node, &newValue, 0);
 }
 
 #include <boost/locale.hpp>
-bool Key::SetValue(std::string &value)
+bool Key::SetValue(std::string value)
 {
 	std::u16string wideValue = boost::locale::conv::utf_to_utf<char16_t>(value);
 	hive_set_value newValue = { const_cast<char *>(_cachedName.data()), hive_t_REG_SZ, (wideValue.size() + 1) * sizeof(char16_t), const_cast<char *>(reinterpret_cast<const char *>(wideValue.data())) };
-	logger.Debug("SetValue %s: %s", _cachedName.c_str(), value.c_str());
+	logger.Debug("SetValue %s: %s", _cachedPath.c_str(), value.c_str());
 	return hivex_node_set_value(_hive, _node, &newValue, 0);
 }
 
@@ -208,10 +209,10 @@ bool Key::GetValue(int32_t &result)
 	if (Exists() && hivex_value_type(_hive, _value, &type, &size) == 0 && type == hive_t_REG_DWORD)
 	{
 		result = hivex_value_dword(_hive, _value);
-		logger.Debug("GetValue %s: %i", _cachedName.c_str(), result);
+		logger.Debug("GetValue %s: %i", _cachedPath.c_str(), result);
 		return true;
 	}
-	logger.Debug("GetValue %s not found", _cachedName.c_str());
+	logger.Debug("GetValue %s not found", _cachedPath.c_str());
 
 	return false;
 }
@@ -227,11 +228,11 @@ bool Key::GetValue(std::string &result)
 		{
 			result = contents;
 			free(contents);
-			logger.Debug("GetValue %s: %s", _cachedName.c_str(), result.c_str());
+			logger.Debug("GetValue %s: %s", _cachedPath.c_str(), result.c_str());
 			return true;
 		}
 	}
-	logger.Debug("GetValue %s not found", _cachedName.c_str());
+	logger.Debug("GetValue %s not found", _cachedPath.c_str());
 
 	return false;
 }
@@ -278,11 +279,11 @@ bool Node::SetKeys(const std::vector<Key> &keys)
 		newValue.key = (char *) key._cachedName.c_str();
 		if (newValue.t == hive_t_REG_SZ)
 		{
-			logger.Debug("SetKeys: %s set to %s", key._cachedName.c_str(), newValue.value);
+			logger.Debug("SetKeys: %s set to %s", key._cachedPath.c_str(), newValue.value);
 		}
 		else if (newValue.t == hive_t_REG_DWORD)
 		{
-			logger.Debug("SetKeys: %s set to %s", key._cachedName.c_str(), *(int32_t*)(void*)newValue.value);
+			logger.Debug("SetKeys: %s set to %s", key._cachedPath.c_str(), *(int32_t*)(void*)newValue.value);
 		}
 		success = success && hivex_node_set_value(_hive, _node, &newValue, 0);
 		free(newValue.value);

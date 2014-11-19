@@ -28,6 +28,7 @@ namespace hivexx
 		hive_value_h _value = 0;
 		hive_node_h _node = 0;
 		hive_h *_hive = nullptr;
+		std::string _cachedPath;
 		std::string _cachedName;
 	public:
 		Key() = default;
@@ -35,8 +36,8 @@ namespace hivexx
 		bool Exists() const;
 		bool GetValue(int32_t &result);
 		bool GetValue(std::string &result);
-		bool SetValue(int32_t &value);
-		bool SetValue(std::string &value);
+		bool SetValue(int32_t value);
+		bool SetValue(std::string value);
 		template <typename T>
 		bool ChangeIfNotEqualTo(T &&compare);
 	};
@@ -62,6 +63,7 @@ namespace hivexx
 		bool DeleteNode(const std::string &path);
 		Node CreateNode(const std::string &path);
 		bool Delete();
+		const std::string &Name() const;
 	};
 
 	class Hive : public Node
@@ -90,7 +92,6 @@ namespace hivexx
 	public:
 		Hive() = default;
 		bool Load(const std::string &path);
-		const std::string &Name() const;
 		const std::string &Path() const;
 		Hive(const std::string &path);
 		~Hive();
