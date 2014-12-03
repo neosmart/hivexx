@@ -35,6 +35,7 @@ Hive::~Hive()
 
 bool Hive::Save()
 {
+	logger.Debug("Hive %s saved", Name().c_str());
 	return hivex_commit(_hive, NULL, 0) == 0;
 }
 
