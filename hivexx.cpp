@@ -1,4 +1,5 @@
 #include "hivexx.h"
+#include <hivex.h>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string.hpp>
@@ -7,6 +8,19 @@
 using namespace std;
 using namespace hivexx;
 using namespace neosmart;
+
+Hive::HiveWrapper::HiveWrapper(hive_h *hive)
+{
+	_hive = hive;
+}
+
+Hive::HiveWrapper::~HiveWrapper()
+{
+	if (_hive != nullptr)
+	{
+		hivex_close(_hive);
+	}
+}
 
 Hive::Hive(const std::string &path)
 	: Node()
@@ -17,11 +31,18 @@ Hive::Hive(const std::string &path)
 bool Hive::Load(const std::string &path)
 {
 	_path = path;
-	_hive = hivex_open(path.c_str(), HIVEX_OPEN_WRITE | HIVEX_OPEN_VERBOSE);
+	_cachedName = std::move(string(path.c_str() + path.find_last_of("/\\") + 1));
+
+	//Test if it physically exists first
+	if (FILE *file = fopen(_path.c_str(), "r"))
+	{
+		fclose(file);
+		_hive = hivex_open(path.c_str(), HIVEX_OPEN_WRITE | HIVEX_OPEN_VERBOSE);
+    }
+
 	_hiveWrapper = make_shared<HiveWrapper>(_hive);
 	if (_hive != nullptr)
 	{
-		_cachedName = std::move(string(path.c_str() + path.find_last_of("/\\") + 1));
 		_node = hivex_root(_hive);
 		return _node != 0;
 	}

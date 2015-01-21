@@ -73,17 +73,8 @@ namespace hivexx
 		private:
 			hive_h *_hive;
 		public:
-			HiveWrapper(hive_h *hive)
-			{
-				_hive = hive;
-			}
-			~HiveWrapper()
-			{
-				if (_hive != nullptr)
-				{
-					hivex_close(_hive);
-				}
-			}
+			HiveWrapper(hive_h *hive);
+			~HiveWrapper();
 		};
 	private:
 		std::string _path;
