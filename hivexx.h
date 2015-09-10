@@ -84,7 +84,6 @@ namespace hivexx
 		Hive() = default;
 		bool Load(const std::string &path);
 		const std::string &Path() const;
-		Hive(const std::string &path);
 		~Hive();
 		bool Save();
 	};

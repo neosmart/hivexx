@@ -22,14 +22,14 @@ Hive::HiveWrapper::~HiveWrapper()
 	}
 }
 
-Hive::Hive(const std::string &path)
-	: Node()
-{
+//Hive::Hive(const std::string &path)
+//	: Node()
+//{
 	//This constructor has been deprecated
 	//It is very important to handle the return errors of Load()
 
 	//Load(path);
-}
+//}
 
 bool Hive::Load(const std::string &path)
 {
