@@ -126,6 +126,8 @@ template bool Key::ChangeIfNotEqualTo(std::string&&);
 
 Node Node::GetNode(const std::string &path, bool create)
 {
+	logger.Debug("GetNode: %s", path.c_str());
+
 	hive_node_h node = _node;
 	bool done = false;
 	char *stub, *pathBuffer;
@@ -143,6 +145,7 @@ Node Node::GetNode(const std::string &path, bool create)
 			{
 				if (create)
 				{
+					logger.Debug("CreateNode: %s", stub);
 					node = hivex_node_add_child(_hive, parentNode, stub);
 				}
 				else
@@ -168,7 +171,6 @@ Node Node::GetNode(const std::string &path, bool create)
 Node Node::CreateNode(const std::string &path)
 {
 	auto node = GetNode(path, true);
-	logger.Debug("CreateNode: %s", path.c_str());
 	return std::move(node);
 }
 
