@@ -47,7 +47,6 @@ namespace hivexx
 		friend class Key;
 	protected:
 		std::string _cachedName;
-		Node GetNode(const std::string &path, bool create);
 		Node(hive_h *hive, hive_node_h node, const std::string &name);
 		hive_node_h _node = 0;
 		hive_h *_hive = nullptr;
@@ -57,7 +56,7 @@ namespace hivexx
 		Key GetKey(const std::string &name);
 		std::vector<Key> GetKeys();
 		bool SetKeys(const std::vector<Key> &keys);
-		Node GetNode(const std::string &path);
+		Node GetNode(const std::string &path, bool create = true);
 		std::vector<Node> GetNodes();
 		bool DeleteKey(const std::string &name);
 		bool DeleteNode(const std::string &path);

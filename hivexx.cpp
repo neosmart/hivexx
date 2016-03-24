@@ -165,11 +165,6 @@ Node Node::GetNode(const std::string &path, bool create)
 	return std::move(Node(_hive, node, path));
 }
 
-Node Node::GetNode(const std::string &path)
-{
-	return GetNode(path, false);
-}
-
 Node Node::CreateNode(const std::string &path)
 {
 	auto node = GetNode(path, true);
