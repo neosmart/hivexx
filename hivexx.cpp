@@ -177,7 +177,7 @@ bool Key::DeleteValue(const std::string &name)
 	if (!Exists())
 	{
 		logger.Warn("DeleteValue: parent key %s not found", _cachedName.c_str());
-		return false;
+		return true; //highly-controversial, but pragmatically correct
 	}
 
 	//libhivex is non-destructive and append-only by nature
@@ -206,7 +206,7 @@ bool Key::DeleteSubkey(const std::string &path)
 	if (!Exists())
 	{
 		logger.Warn("DeleteSubkey: parent key %s not found", _cachedName.c_str());
-		return false;
+		return true; //highly-controversial, but pragmatically correct
 	}
 
 	auto node = GetSubkey(path, false);
