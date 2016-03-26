@@ -46,7 +46,7 @@ namespace hivexx
 		bool Exists() const;
 		std::vector<UntypedRegistryValue> GetValues();
 		bool SetValues(const std::vector<UntypedRegistryValue> &values);
-		Key GetSubkey(std::string path, bool create = true);
+		Key GetSubkey(std::string path, bool create = false);
 		std::vector<Key> GetSubkeys();
 		bool Delete();
 		bool DeleteValue(const std::string &name);
