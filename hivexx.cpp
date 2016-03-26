@@ -102,9 +102,15 @@ bool Key::Exists() const
 	return _node != 0 && _hive != nullptr;
 }
 
+template bool Key::ChangeIfNotEqualTo(const std::string &name, int&&, bool orNull);
+template bool Key::ChangeIfNotEqualTo(const std::string &name, std::string&&, bool orNull);
+
 template <typename T>
-bool Key::ChangeIfNotEqualTo(const string &name, T &&compare)
+bool Key::ChangeIfNotEqualTo(const string &name, T &&compare, bool orNull)
 {
+	auto logMessage = str(boost::format("ChangeIfNotEqual: %1%\\%2% to %3%") % _cachedName % name.c_str() % compare);
+	logger.Debug(logMessage.c_str());
+
 	if (!Exists())
 	{
 		logger.Warn("ChangeIfNotEqualTo: parent key %s not found", _cachedName.c_str());
@@ -112,19 +118,15 @@ bool Key::ChangeIfNotEqualTo(const string &name, T &&compare)
 	}
 
 	T oldValue;
-	if (GetValue(name, oldValue) && oldValue != compare)
+	bool found = GetValue(name, oldValue);
+	if (orNull || found)
 	{
-		auto logMessage = str(boost::format("ChangeIfNotEqual: changing %1%\\%2% from %3% to %4%") % _cachedName % name.c_str() % oldValue % compare);
-		logger.Debug("%s", logMessage.c_str());
-		return SetValue(name, compare);
+		return (found && (oldValue == compare)) || SetValue(name, compare);
 	}
 
 	logger.Warn("ChangeIfNotEqualTo: value %s\\%s not found", _cachedName.c_str(), name.c_str());
 	return false;
 }
-
-template bool Key::ChangeIfNotEqualTo(const std::string &name, int&&);
-template bool Key::ChangeIfNotEqualTo(const std::string &name, std::string&&);
 
 Key Key::GetSubkey(std::string path, bool create)
 {

@@ -60,7 +60,7 @@ namespace hivexx
 		bool SetValue(const std::string &name, int32_t value);
 		bool SetValue(const std::string &name, std::string value);
 		template <typename T>
-		bool ChangeIfNotEqualTo(const std::string &name, T &&compare);
+		bool ChangeIfNotEqualTo(const std::string &name, T &&compare, bool orNotFound = false);
 	};
 
 	class Hive : public Key
