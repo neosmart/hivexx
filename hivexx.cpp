@@ -231,6 +231,17 @@ bool Key::SetValue(const std::string &name, std::string value)
 	return hivex_node_set_value(_hive, _node, &newValue, 0) == 0;
 }
 
+bool Key::HasValue(const string &name) const
+{
+	if (!Exists())
+	{
+		logger.Warn("HasValue: parent key %s not found", _cachedName.c_str());
+		return false;
+	}
+
+	return hivex_node_get_value(_hive, _node, name.c_str()) == 0;
+}
+
 bool Key::GetValue(const std::string &name, int32_t &result)
 {
 	hive_type type;
