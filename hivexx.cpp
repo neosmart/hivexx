@@ -14,7 +14,7 @@ template<typename T>
 cunique<T> make_cunique(T *t)
 {
 	static_assert(!is_void<T>::value, "unique_ptr of void is not valid!");
-    return cunique<T>(std::forward<T*>(t), [] (T *t2) { if (t2 != nullptr) free(t2); });
+	return cunique<T>(std::forward<T*>(t), [] (T *t2) { if (t2 != nullptr) free(t2); });
 }
 
 Hive::HiveWrapper::HiveWrapper(hive_h *hive)
@@ -50,7 +50,7 @@ bool Hive::Load(const std::string &path)
 	{
 		fclose(file);
 		_hive = hivex_open(path.c_str(), HIVEX_OPEN_WRITE | HIVEX_OPEN_VERBOSE);
-    }
+	}
 
 	_hiveWrapper = make_shared<HiveWrapper>(_hive);
 	if (_hive != nullptr)
