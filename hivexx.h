@@ -7,65 +7,63 @@
 #include <functional>
 
 /* hivexx C++ wrapper for libhivex
- * Everything in the registry is a key
- * A key can have a value, subkeys, or both
- * e.g. HKLM\SYSTEM is a hive
- * HKLM\SYSTEM is also a node
- * HKLM\SYSTEM is also a key (name = "", value = <anything>)
- * HKLM\SYSTEM also contains subkeys Select, CurrentControlSet, etc.
- * However, libhivex treats nodes and keys differently
+ * Everything in the registry is a key, value, or both
+ * Key: aka "registry folder", or what you see in the regedit sidebar
+ * Value: <name, value> pair of type DWORD/QWORD/REG_SZ/etc
+ * All keys are also values, which is the "unnamed value" in regedit
 */
 
 namespace hivexx
 {
-	class Node;
+	template<typename T>
+	using cunique = std::unique_ptr<T, std::function<void(T*)>>;
+
+	struct UntypedRegistryValue
+	{
+		cunique<char> Name;
+		hive_type Type;
+		cunique<char> Value;
+		size_t Length;
+	};
+
+	template<typename T>
+	struct RegistryValue:
+		UntypedRegistryValue
+	{
+		T& Value;
+	};
+
 	class Key
 	{
-		friend class Node;
-	private:
-		Key(const Node &node, hive_value_h value, const std::string &name);
+		friend class Value;
 	protected:
-		hive_value_h _value = 0;
+		std::string _cachedName;
+		Key(hive_h *hive, hive_node_h node, const std::string &name);
 		hive_node_h _node = 0;
 		hive_h *_hive = nullptr;
-		std::string _cachedPath;
-		std::string _cachedName;
 	public:
 		Key() = default;
-		const std::string &Name();
 		bool Exists() const;
-		bool GetValue(int32_t &result);
-		bool GetValue(std::string &result);
-		bool SetValue(int32_t value);
-		bool SetValue(std::string value);
-		template <typename T>
-		bool ChangeIfNotEqualTo(T &&compare);
-	};
-
-	class Node
-	{
-		friend class Key;
-	protected:
-		std::string _cachedName;
-		Node(hive_h *hive, hive_node_h node, const std::string &name);
-		hive_node_h _node = 0;
-		hive_h *_hive = nullptr;
-	public:
-		Node() = default;
-		bool Exists() const;
-		Key GetKey(const std::string &name);
-		std::vector<Key> GetKeys();
-		bool SetKeys(const std::vector<Key> &keys);
-		Node GetNode(const std::string &path, bool create = true);
-		std::vector<Node> GetNodes();
-		bool DeleteKey(const std::string &name);
-		bool DeleteNode(const std::string &path);
-		Node CreateNode(const std::string &path);
+		std::vector<UntypedRegistryValue> GetValues();
+		bool SetValues(const std::vector<UntypedRegistryValue> &values);
+		Key GetSubkey(std::string path, bool create = true);
+		std::vector<Key> GetSubkeys();
 		bool Delete();
+		bool DeleteValue(const std::string &name);
+		bool DeleteSubkey(const std::string &path);
+		Key CreateSubkey(const std::string &path);
 		const std::string &Name() const;
+
+		bool HasValue(const std::string &name) const;
+		bool GetValue(const std::string &name, int32_t &result);
+		bool GetValue(const std::string &name, std::string &result);
+		bool SetValue(const std::string &name, int32_t value);
+		bool SetValue(const std::string &name, std::string value);
+		template <typename T>
+		bool ChangeIfNotEqualTo(const std::string &name, T &&compare);
 	};
 
-	class Hive : public Node
+	class Hive : public Key
 	{
 		struct HiveWrapper
 		{

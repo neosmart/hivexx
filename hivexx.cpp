@@ -1,5 +1,6 @@
 #include "hivexx.h"
 #include <hivex.h>
+#include <algorithm>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string.hpp>
@@ -8,6 +9,13 @@
 using namespace std;
 using namespace hivexx;
 using namespace neosmart;
+
+template<typename T>
+cunique<T> make_cunique(T *t)
+{
+	static_assert(!is_void<T>::value, "unique_ptr of void is not valid!");
+    return cunique<T>(std::forward<T*>(t), [] (T *t2) { if (t2 != nullptr) free(t2); });
+}
 
 Hive::HiveWrapper::HiveWrapper(hive_h *hive)
 {
@@ -23,7 +31,7 @@ Hive::HiveWrapper::~HiveWrapper()
 }
 
 //Hive::Hive(const std::string &path)
-//	: Node()
+//	: Key()
 //{
 	//This constructor has been deprecated
 	//It is very important to handle the return errors of Load()
@@ -33,8 +41,9 @@ Hive::HiveWrapper::~HiveWrapper()
 
 bool Hive::Load(const std::string &path)
 {
+	logger.SetLogLevel(Debug);
 	_path = path;
-	_cachedName = std::move(string(path.c_str() + path.find_last_of("/\\") + 1));
+	_cachedName = string(path.c_str() + path.find_last_of("/\\") + 1);
 
 	//Test if it physically exists first
 	if (FILE *file = fopen(_path.c_str(), "r"))
@@ -63,16 +72,7 @@ bool Hive::Save()
 	return hivex_commit(_hive, NULL, 0) == 0;
 }
 
-Key::Key(const Node &node, hive_value_h value, const std::string &name)
-{
-	_node = node._node;
-	_hive = node._hive;
-	_value = value;
-	_cachedName = name;
-	_cachedPath = str(boost::format("%s\\%s") % node.Name() % name);
-}
-
-Node::Node(hive_h *hive, hive_node_h node, const std::string &name)
+Key::Key(hive_h *hive, hive_node_h node, const std::string &name)
 {
 	_hive = hive;
 	_node = node;
@@ -84,7 +84,7 @@ const std::string &Hive::Path() const
 	return _path;
 }
 
-const std::string &Node::Name() const
+const std::string &Key::Name() const
 {
 	return _cachedName;
 }
@@ -92,61 +92,54 @@ const std::string &Node::Name() const
 bool Key::Exists() const
 {
 	//ScopeLog x(__FUNCTION__);
-	return _value != 0;
-}
-
-bool Node::Exists() const
-{
-	//ScopeLog x(__FUNCTION__);
 	return _node != 0 && _hive != nullptr;
 }
 
 template <typename T>
-bool Key::ChangeIfNotEqualTo(T &&compare)
+bool Key::ChangeIfNotEqualTo(const string &name, T &&compare)
 {
 	if (!Exists())
 	{
-		logger.Debug("ChangeIfNotEqualTo: %s not found", _cachedName.c_str());
+		logger.Debug("ChangeIfNotEqualTo: %s%\\%s not found", _cachedName.c_str(), name.c_str());
 		return false;
 	}
 
 	T oldValue;
-	if (GetValue(oldValue) && oldValue != compare)
+	if (GetValue(name, oldValue) && oldValue != compare)
 	{
-		auto logMessage = str(boost::format("ChangeIfNotEqual: changing %1% from %2% to %3%") % _cachedName % oldValue % compare);
+		auto logMessage = str(boost::format("ChangeIfNotEqual: changing %1%\\%2% from %3% to %4%") % _cachedName % name.c_str() % oldValue % compare);
 		logger.Debug("%s", logMessage.c_str());
-		return SetValue(compare);
+		return SetValue(name, compare);
 	}
 
 	return false;
 }
 
-template bool Key::ChangeIfNotEqualTo(int&&);
-template bool Key::ChangeIfNotEqualTo(std::string&&);
+template bool Key::ChangeIfNotEqualTo(const std::string &name, int&&);
+template bool Key::ChangeIfNotEqualTo(const std::string &name, std::string&&);
 
-Node Node::GetNode(const std::string &path, bool create)
+Key Key::GetSubkey(std::string path, bool create)
 {
-	logger.Debug("GetNode: %s", path.c_str());
+	logger.Debug("GetSubkey: %s", path.c_str());
 
 	hive_node_h node = _node;
 	bool done = false;
-	char *stub, *pathBuffer;
-	pathBuffer = strdup(path.c_str());
+	char *stub;
 	bool notFound = false;
 
-	for (char *letter = stub = pathBuffer; !done && node && *stub; ++letter)
+	for (char *letter = stub = const_cast<char*>(path.data()); !done && node && *stub; ++letter)
 	{
 		if ((*letter == '\\') || (done = *letter == '\0'))
 		{
 			*letter = '\0';
-			hive_node_h parentNode = node;
+			hive_node_h parentKey = node;
 			node = hivex_node_get_child(_hive, node, stub);
 			if (node == 0)
 			{
 				if (create)
 				{
-					logger.Debug("CreateNode: %s", stub);
-					node = hivex_node_add_child(_hive, parentNode, stub);
+					logger.Debug("CreateSubkey: %s", stub);
+					node = hivex_node_add_child(_hive, parentKey, stub);
 				}
 				else
 				{
@@ -157,33 +150,47 @@ Node Node::GetNode(const std::string &path, bool create)
 		}
 	}
 
-	free(pathBuffer);
-
 	if (notFound)
 	{
-		logger.Debug("Node not found: %s", path.c_str());
-		return std::move(Node(nullptr, 0, path));
+		logger.Debug("Key not found: %s", path.c_str());
+		return Key(nullptr, 0, path);
 	}
 
-	return std::move(Node(_hive, node, path));
+	return Key(_hive, node, path);
 }
 
-Node Node::CreateNode(const std::string &path)
+Key Key::CreateSubkey(const std::string &path)
 {
-	auto node = GetNode(path, true);
-	return std::move(node);
+	return GetSubkey(path, true);
 }
 
-bool Node::DeleteKey(const std::string &name)
+//Returns true even if the value never existed. False only on failure to delete.
+bool Key::DeleteValue(const std::string &name)
 {
-	throw std::exception();
-	//Currently, libhivex does not support deleting a single key
-	//In the future, this function should get the contents of the current node, remove the key from the vector, delete the node, and re-add
+	//libhivex is non-destructive and append-only by nature
+	//as such, it does not allow removal of a key, only changing its value
+	//by pointing it a new value appended to the registry hive
+	//We work around this by exporting the key contents, removing the entire key,
+	//then re-importing the conutents minus the value we wish to remove
+	auto values = GetValues();
+
+	//We can use remove_if, but for efficiency's sake we should stop after one match
+	for (auto value = values.cbegin(); value != values.cend(); ++value)
+	{
+		if (boost::iequals(name, value->Name.get()))
+		{
+			values.erase(value);
+			return SetValues(values);
+		}
+	}
+
+	//Value not found, but that's ok
+	return true;
 }
 
-bool Node::DeleteNode(const std::string &path)
+bool Key::DeleteSubkey(const std::string &path)
 {
-	auto node = GetNode(path);
+	auto node = GetSubkey(path, false);
 	if (!node.Exists())
 	{
 		return true;
@@ -192,127 +199,125 @@ bool Node::DeleteNode(const std::string &path)
 	return hivex_node_delete_child(_hive, node._node) == 0;
 }
 
-std::vector<Node> Node::GetNodes()
+std::vector<Key> Key::GetSubkeys()
 {
-	std::vector<Node> children;
+	std::vector<Key> children;
 
 	for (auto node = hivex_node_children(_hive, _node); node && *node; ++node)
 	{
-		char *temp = hivex_node_name(_hive, *node);
-		Node newNode(_hive, *node, str(boost::format("%s\\%s") % _cachedName % temp));
-		free (temp);
+		auto temp = make_cunique(hivex_node_name(_hive, *node));
+		Key newKey(_hive, *node, str(boost::format("%s\\%s") % _cachedName % temp.get()));
 
-		children.push_back(std::move(newNode));
+		children.push_back(std::move(newKey));
 	}
 
-	return std::move(children);
+	return children;
 }
 
-bool Key::SetValue(int32_t value)
+bool Key::SetValue(const std::string &name, int32_t value)
 {
-	hive_set_value newValue = { const_cast<char *>(_cachedName.data()), hive_t_REG_DWORD, sizeof(int), (char *) &value };
+	hive_set_value newValue = { const_cast<char *>(name.data()), hive_t_REG_DWORD, sizeof(int), (char *) &value };
 
-	logger.Debug("SetValue %s: %i", _cachedPath.c_str(), value);
+	logger.Debug("SetValue %s\\%s: %i", _cachedName.c_str(), name.c_str(), value);
 	return hivex_node_set_value(_hive, _node, &newValue, 0) == 0;
 }
 
 #include <boost/locale.hpp>
-bool Key::SetValue(std::string value)
+bool Key::SetValue(const std::string &name, std::string value)
 {
 	std::u16string wideValue = boost::locale::conv::utf_to_utf<char16_t>(value);
-	hive_set_value newValue = { const_cast<char *>(_cachedName.data()), hive_t_REG_SZ, (wideValue.size() + 1) * sizeof(char16_t), const_cast<char *>(reinterpret_cast<const char *>(wideValue.data())) };
-	logger.Debug("SetValue %s: %s", _cachedPath.c_str(), value.c_str());
+	hive_set_value newValue = { const_cast<char *>(name.data()), hive_t_REG_SZ, (wideValue.size() + 1) * sizeof(char16_t), const_cast<char *>(reinterpret_cast<const char *>(wideValue.data())) };
+	logger.Debug("SetValue %s\\%s: %s", _cachedName.c_str(), name.c_str(), value.c_str());
 	return hivex_node_set_value(_hive, _node, &newValue, 0) == 0;
 }
 
-bool Key::GetValue(int32_t &result)
+bool Key::GetValue(const std::string &name, int32_t &result)
 {
 	hive_type type;
 	size_t size = 0;
-	if (Exists() && hivex_value_type(_hive, _value, &type, &size) == 0 && type == hive_t_REG_DWORD)
+	if (Exists())
 	{
-		result = hivex_value_dword(_hive, _value);
-		logger.Debug("GetValue %s: %i", _cachedPath.c_str(), result);
-		return true;
-	}
-	logger.Debug("GetValue %s not found", _cachedPath.c_str());
-
-	return false;
-}
-
-bool Key::GetValue(std::string &result)
-{
-	hive_type type;
-	size_t size = 0;
-	if (Exists() && hivex_value_type(_hive, _value, &type, &size) == 0 && type == hive_t_REG_SZ)
-	{
-		char *contents = hivex_value_string(_hive, _value);
-		if (contents != nullptr)
+		auto value = hivex_node_get_value(_hive, _node, name.c_str());
+		if (value != 0 && hivex_value_type(_hive, value, &type, &size) == 0 && type == hive_t_REG_DWORD)
 		{
-			result = contents;
-			free(contents);
-			logger.Debug("GetValue %s: %s", _cachedPath.c_str(), result.c_str());
+			result = hivex_value_dword(_hive, value);
+			logger.Debug("GetValue %s: %i", _cachedName.c_str(), result);
 			return true;
 		}
 	}
-	logger.Debug("GetValue %s not found", _cachedPath.c_str());
+	logger.Debug("GetValue: %s not found", _cachedName.c_str());
 
 	return false;
 }
 
-bool Node::Delete()
+bool Key::GetValue(const std::string &name, std::string &result)
+{
+	hive_type type;
+	size_t size = 0;
+	if (Exists())
+	{
+		auto value = hivex_node_get_value(_hive, _node, name.c_str());
+		if (value != 0 && hivex_value_type(_hive, value, &type, &size) == 0 && type == hive_t_REG_SZ)
+		{
+			auto contents = make_cunique(hivex_value_string(_hive, value));
+			if (contents != nullptr)
+			{
+				result = contents.get();
+				logger.Debug("GetValue %s: %s", _cachedName.c_str(), result.c_str());
+				return true;
+			}
+		}
+	}
+	logger.Debug("GetValue %s not found", _cachedName.c_str());
+
+	return false;
+}
+
+bool Key::Delete()
 {
 	logger.Debug("Delete: %s", _cachedName.c_str());
 	return hivex_node_delete_child(_hive, _node) == 0;
 }
 
-Key Node::GetKey(const std::string &name)
+vector<UntypedRegistryValue> Key::GetValues()
 {
-	Key key(*this, hivex_node_get_value(_hive, _node, name.c_str()), name);
-	return std::move(key);
-}
+	ScopeLog x(__FUNCTION__);
+	vector<UntypedRegistryValue> values;
 
-std::vector<Key> Node::GetKeys()
-{
-	std::vector<Key> subkeys;
-
-	hive_value_h *values = hivex_node_values(_hive, _node);
-	for (auto &value = values; value != nullptr && *value != 0; ++value)
+	auto hValues = make_cunique(hivex_node_values(_hive, _node));
+	if (!hValues)
 	{
-		char *temp = hivex_value_key(_hive, *value);
-		Key key(*this, *value, temp);
-		free (temp);
-		subkeys.push_back(std::move(key));
-	}
-	if (values != nullptr)
-	{
-		free(values);
+		logger.Error("hivex_node_values returned null! errno %d: %s", errno, strerror(errno));
+		return values;
 	}
 
-	return std::move(subkeys);
+	for (auto value = hValues.get(); value != nullptr && *value != 0; ++value)
+	{
+		UntypedRegistryValue val;
+		val.Name = make_cunique(hivex_value_key(_hive, *value));
+		val.Value = make_cunique(hivex_value_value(_hive, *value, &val.Type, &val.Length));
+
+		values.push_back(std::move(val));
+	}
+
+	return values;
 }
 
-bool Node::SetKeys(const std::vector<Key> &keys)
+bool Key::SetValues(const std::vector<UntypedRegistryValue> &values)
 {
 	bool success = true;
-	for (const auto &key : keys)
+	for (const auto &value : values)
 	{
-		hive_set_value newValue = {0};
-		newValue.value = hivex_value_value(key._hive, key._value, &newValue.t, &newValue.len);
-		newValue.key = (char *) key._cachedName.c_str();
-		if (newValue.t == hive_t_REG_SZ)
-		{
-			logger.Debug("SetKeys: %s set to %s", key._cachedPath.c_str(), newValue.value);
-		}
-		else if (newValue.t == hive_t_REG_DWORD)
-		{
-			logger.Debug("SetKeys: %s set to %s", key._cachedPath.c_str(), *(int32_t*)(void*)newValue.value);
-		}
+		hive_set_value newValue;
+		newValue.key = value.Name.get();
+		newValue.t = value.Type;
+		newValue.len = value.Length;
+		newValue.value = value.Value.get();
+
 		if (hivex_node_set_value(_hive, _node, &newValue, 0) != 0)
 		{
 			success = false;
 		}
-		free(newValue.value);
 	}
 
 	return success;
