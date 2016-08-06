@@ -300,6 +300,38 @@ bool Key::SetValue(const std::string &name, std::string value)
 	return false;
 }
 
+bool Key::SetValue(const std::string &name, std::vector<std::string> values)
+{
+	if (!Exists())
+	{
+		logger.Warn("SetValue: parent key %s not found", _cachedName.c_str());
+		return false;
+	}
+
+	std::vector<char16_t> buffer;
+	for (const auto &value : values)
+	{
+		auto wideValue = boost::locale::conv::utf_to_utf<char16_t>(value);
+		buffer.push_back(buffer.end(), wideValue.begin(), wideValue.end());
+		buffer.push_back(u'\0');
+	}
+	buffer.push_back(u'\0');
+	hive_set_value newValue = { const_cast<char *>(name.data()), hive_t_REG_MULTI_SZ, buffer.size() * sizeof(char16_t), const_cast<char *>(reinterpret_cast<const char *>(buffer.data())) };
+
+	if (hivex_node_set_value(_hive, _node, &newValue, 0) == 0)
+	{
+		uint32_t count = 0;
+		for (const auto &value : values)
+		{
+			logger.Debug("SetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, value.c_str());
+		}
+		return true;
+	}
+
+	logger.Error("SetValue %s\\%s: %s failed", _cachedName.c_str(), name.c_str(), value.c_str());
+	return false;
+}
+
 bool Key::HasValue(const string &name) const
 {
 	if (!Exists())
@@ -357,7 +389,39 @@ bool Key::GetValue(const std::string &name, std::string &result)
 		if (contents != nullptr)
 		{
 			result = contents.get();
-			logger.Debug("GetValue %s\\%s: %s", _cachedName.c_str(), name.c_str(), result.c_str());
+			logger.Debug("GetValue %s\\%s: %s", _cachedName.c_str(), name.c_str(), contents.get());
+			return true;
+		}
+	}
+
+	logger.Debug("GetValue: value %s\\%s not found", _cachedName.c_str(), name.c_str());
+	return false;
+}
+
+bool Key::GetValue(const std::string &name, std::vector<std::string> result)
+{
+	if (!Exists())
+	{
+		logger.Warn("GetValue: parent key %s not found", _cachedName.c_str());
+		return false;
+	}
+
+	hive_type type;
+	size_t size = 0;
+	auto value = hivex_node_get_value(_hive, _node, name.c_str());
+	if (value != 0 && hivex_value_type(_hive, value, &type, &size) == 0 && type == hive_t_REG_MULTI_SZ)
+	{
+		auto contents = make_cunique(hivex_value_multiple_strings(_hive, value));
+		if (contents != nullptr)
+		{
+			uint32_t count = 0;
+			result.clear();
+			for (const char **ptr = contents.get(); *ptr != nullptr; ++ptr)
+			{
+				auto value = make_cunique(*ptr);
+				result.push_back(value.get());
+				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, value.get());
+			}
 			return true;
 		}
 	}
