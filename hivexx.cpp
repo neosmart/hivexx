@@ -324,6 +324,10 @@ bool Key::SetValue(const std::string &name, std::vector<std::string> values)
 	{
 		logger.Debug("SetValue %s\\%s[%u]: %s%s", _cachedName.c_str(), name.c_str(), count++, value.c_str(), result ? "" : "failed");
 	}
+	if (count == 0)
+	{
+		logger.Debug("SetValue %s\\%s: <empty>", _cachedName.c_str(), name.c_str());
+	}
 	return result;
 }
 
@@ -393,7 +397,7 @@ bool Key::GetValue(const std::string &name, std::string &result)
 	return false;
 }
 
-bool Key::GetValue(const std::string &name, std::vector<std::string> result)
+bool Key::GetValue(const std::string &name, std::vector<std::string> &result)
 {
 	if (!Exists())
 	{
@@ -414,8 +418,12 @@ bool Key::GetValue(const std::string &name, std::vector<std::string> result)
 			for (char **ptr = contents.get(); *ptr != nullptr && **ptr != 0; ++ptr)
 			{
 				auto str = make_cunique(*ptr);
-				result.push_back(str.get());
+				result.emplace_back(str.get());
 				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, str.get());
+			}
+			if (result.empty())
+			{
+				logger.Debug("GetValue %s\\%s: <empty>", _cachedName.c_str(), name.c_str());
 			}
 			return true;
 		}
