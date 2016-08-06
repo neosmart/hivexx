@@ -279,7 +279,7 @@ bool Key::SetValue(const std::string &name, int32_t value)
 }
 
 #include <boost/locale.hpp>
-bool Key::SetValue(const std::string &name, std::string value)
+bool Key::SetValue(const std::string &name, const std::string &value)
 {
 	if (!Exists())
 	{
@@ -300,7 +300,7 @@ bool Key::SetValue(const std::string &name, std::string value)
 	return false;
 }
 
-bool Key::SetValue(const std::string &name, std::vector<std::string> values)
+bool Key::SetValue(const std::string &name, const std::vector<std::string> &values)
 {
 	if (!Exists())
 	{

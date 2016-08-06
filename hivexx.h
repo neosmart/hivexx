@@ -59,8 +59,8 @@ namespace hivexx
 		bool GetValue(const std::string &name, std::string &result);
 		bool GetValue(const std::string &name, std::vector<std::string> &result);
 		bool SetValue(const std::string &name, int32_t value);
-		bool SetValue(const std::string &name, std::string value);
-		bool SetValue(const std::string &name, std::vector<std::string> values);
+		bool SetValue(const std::string &name, const std::string &value);
+		bool SetValue(const std::string &name, const std::vector<std::string> &values);
 		template <typename T>
 		bool ChangeIfNotEqualTo(const std::string &name, T &&compare, bool orNotFound = false);
 	};
