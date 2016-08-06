@@ -312,24 +312,19 @@ bool Key::SetValue(const std::string &name, std::vector<std::string> values)
 	for (const auto &value : values)
 	{
 		auto wideValue = boost::locale::conv::utf_to_utf<char16_t>(value);
-		buffer.push_back(buffer.end(), wideValue.begin(), wideValue.end());
+		buffer.insert(buffer.end(), wideValue.begin(), wideValue.end());
 		buffer.push_back(u'\0');
 	}
 	buffer.push_back(u'\0');
 	hive_set_value newValue = { const_cast<char *>(name.data()), hive_t_REG_MULTI_SZ, buffer.size() * sizeof(char16_t), const_cast<char *>(reinterpret_cast<const char *>(buffer.data())) };
 
-	if (hivex_node_set_value(_hive, _node, &newValue, 0) == 0)
+	bool result = (hivex_node_set_value(_hive, _node, &newValue, 0) == 0);
+	uint32_t count = 0;
+	for (const auto &value : values)
 	{
-		uint32_t count = 0;
-		for (const auto &value : values)
-		{
-			logger.Debug("SetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, value.c_str());
-		}
-		return true;
+		logger.Debug("SetValue %s\\%s[%u]: %s%s", _cachedName.c_str(), name.c_str(), count++, value.c_str(), result ? "" : "failed");
 	}
-
-	logger.Error("SetValue %s\\%s: %s failed", _cachedName.c_str(), name.c_str(), value.c_str());
-	return false;
+	return result;
 }
 
 bool Key::HasValue(const string &name) const
@@ -416,11 +411,11 @@ bool Key::GetValue(const std::string &name, std::vector<std::string> result)
 		{
 			uint32_t count = 0;
 			result.clear();
-			for (const char **ptr = contents.get(); *ptr != nullptr; ++ptr)
+			for (char **ptr = contents.get(); *ptr != nullptr && **ptr != 0; ++ptr)
 			{
-				auto value = make_cunique(*ptr);
-				result.push_back(value.get());
-				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, value.get());
+				auto str = make_cunique(*ptr);
+				result.push_back(str.get());
+				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, str.get());
 			}
 			return true;
 		}
