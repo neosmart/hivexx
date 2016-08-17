@@ -191,7 +191,7 @@ bool Key::DeleteValue(const std::string &name)
 	auto values = GetValues();
 
 	//We can use remove_if, but for efficiency's sake we should stop after one match
-	for (auto value = values.cbegin(); value != values.cend(); ++value)
+	for (auto value = values.begin(); value != values.end(); ++value)
 	{
 		if (boost::iequals(name, value->Name.get()))
 		{
