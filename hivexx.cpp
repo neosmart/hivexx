@@ -366,7 +366,7 @@ bool Key::GetValue(const std::string &name, int32_t &result)
 		logger.Debug("GetValue %s\\%s: %d", _cachedName.c_str(), name.c_str(), result);
 		return true;
 	}
-	
+
 	logger.Error("GetValue: value %s\\%s not found", _cachedName.c_str(), name.c_str());
 	return false;
 }
