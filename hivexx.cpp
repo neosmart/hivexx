@@ -52,9 +52,9 @@ bool Hive::Load(const std::string &path)
 		_hive = hivex_open(path.c_str(), HIVEX_OPEN_WRITE | HIVEX_OPEN_VERBOSE);
 	}
 
-	_hiveWrapper = make_shared<HiveWrapper>(_hive);
 	if (_hive != nullptr)
 	{
+		_hiveWrapper = make_shared<HiveWrapper>(_hive);
 		_node = hivex_root(_hive);
 		return _node != 0;
 	}
