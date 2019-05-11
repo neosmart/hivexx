@@ -1,7 +1,6 @@
 #include "hivexx.h"
 #include <hivex.h>
 #include <algorithm>
-#include <boost/format.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string.hpp>
 #include <nst-log/Log.h>
@@ -59,7 +58,7 @@ bool Hive::Load(const std::string &path)
 		return _node != 0;
 	}
 
-	logger.Error("Could not open %s", path.c_str());
+	logger.Error("Could not open %s", path);
 	return false;
 }
 
@@ -71,11 +70,11 @@ bool Hive::Save()
 {
 	if (hivex_commit(_hive, NULL, 0) == 0)
 	{
-		logger.Debug("Hive %s saved", Name().c_str());
+		logger.Debug("Hive %s saved", Name());
 		return true;
 	}
 
-	logger.Error("Could not save %s!", Name().c_str());
+	logger.Error("Could not save %s!", Name());
 	return false;
 }
 
@@ -108,12 +107,11 @@ template bool Key::ChangeIfNotEqualTo(const std::string &name, std::string&&, bo
 template <typename T>
 bool Key::ChangeIfNotEqualTo(const string &name, T &&compare, bool orNull)
 {
-	auto logMessage = str(boost::format("ChangeIfNotEqual: %1%\\%2% to %3%") % _cachedName % name.c_str() % compare);
-	logger.Debug(logMessage.c_str());
+	logger.Debug("ChangeIfNotEqual: %s\\%s to %s", _cachedName, name, compare);
 
 	if (!Exists())
 	{
-		logger.Warn("ChangeIfNotEqualTo: parent key %s not found", _cachedName.c_str());
+		logger.Warn("ChangeIfNotEqualTo: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -124,7 +122,7 @@ bool Key::ChangeIfNotEqualTo(const string &name, T &&compare, bool orNull)
 		return (found && (oldValue == compare)) || SetValue(name, compare);
 	}
 
-	logger.Warn("ChangeIfNotEqualTo: value %s\\%s not found", _cachedName.c_str(), name.c_str());
+	logger.Warn("ChangeIfNotEqualTo: value %s\\%s not found", _cachedName, name);
 	return false;
 }
 
@@ -132,11 +130,11 @@ Key Key::GetSubkey(std::string path, bool create)
 {
 	if (!Exists())
 	{
-		logger.Warn("GetSubkey: parent key %s not found", _cachedName.c_str());
+		logger.Warn("GetSubkey: parent key %s not found", _cachedName);
 		return Key(nullptr, 0, path); //set _cachedName so we can use it in logging later
 	}
 
-	logger.Debug("GetSubkey: %s\\%s", _cachedName.c_str(), path.c_str());
+	logger.Debug("GetSubkey: %s\\%s", _cachedName, path);
 
 	hive_node_h node = _node;
 	bool done = false;
@@ -158,7 +156,7 @@ Key Key::GetSubkey(std::string path, bool create)
 				}
 				else
 				{
-					logger.Info("Key not found: %s\\%s", _cachedName.c_str(), path.c_str());
+					logger.Info("Key not found: %s\\%s", _cachedName, path);
 					return Key(nullptr, 0, path); //set _cachedName so we can use it in logging later
 				}
 			}
@@ -179,7 +177,7 @@ bool Key::DeleteValue(const std::string &name)
 {
 	if (!Exists())
 	{
-		logger.Warn("DeleteValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("DeleteValue: parent key %s not found", _cachedName);
 		return true; //highly-controversial, but pragmatically correct
 	}
 
@@ -198,7 +196,7 @@ bool Key::DeleteValue(const std::string &name)
 			values.erase(value);
 			if (SetValues(values))
 			{
-				logger.Debug("DeleteValue: %s\\%s deleted", _cachedName.c_str(), name.c_str());
+				logger.Debug("DeleteValue: %s\\%s deleted", _cachedName, name);
 				return true;
 			}
 			return false;
@@ -206,7 +204,7 @@ bool Key::DeleteValue(const std::string &name)
 	}
 
 	//Value not found, but that's ok
-	logger.Debug("DeleteValue: %s\\%s didn't exist", _cachedName.c_str(), name.c_str());
+	logger.Debug("DeleteValue: %s\\%s didn't exist", _cachedName, name);
 	return true;
 }
 
@@ -214,43 +212,43 @@ bool Key::DeleteSubkey(const std::string &path)
 {
 	if (!Exists())
 	{
-		logger.Warn("DeleteSubkey: parent key %s not found", _cachedName.c_str());
+		logger.Warn("DeleteSubkey: parent key %s not found", _cachedName);
 		return true; //highly-controversial, but pragmatically correct
 	}
 
 	auto node = GetSubkey(path, false);
 	if (!node.Exists())
 	{
-		logger.Debug("DeleteSubkey: %s\\%s didn't exist", _cachedName.c_str(), path.c_str());
+		logger.Debug("DeleteSubkey: %s\\%s didn't exist", _cachedName, path);
 		return true;
 	}
 
 	if (hivex_node_delete_child(_hive, node._node) == 0)
 	{
-		logger.Debug("DeleteSubkey: %s\\%s", _cachedName.c_str(), path.c_str());
+		logger.Debug("DeleteSubkey: %s\\%s", _cachedName, path);
 		return true;
 	}
 
-	logger.Error("DeleteSubkey: %s\\%s failed", _cachedName.c_str(), path.c_str());
+	logger.Error("DeleteSubkey: %s\\%s failed", _cachedName, path);
 	return false;
 }
 
 std::vector<Key> Key::GetSubkeys()
 {
-	logger.Debug("GetSubkeys: %s", _cachedName.c_str());
+	logger.Debug("GetSubkeys: %s", _cachedName);
 
 	std::vector<Key> children;
 
 	if (!Exists())
 	{
-		logger.Warn("GetSubkeys: parent key %s not found", _cachedName.c_str());
+		logger.Warn("GetSubkeys: parent key %s not found", _cachedName);
 		return children;
 	}
 
 	for (auto node = hivex_node_children(_hive, _node); node && *node; ++node)
 	{
 		auto temp = make_cunique(hivex_node_name(_hive, *node));
-		Key newKey(_hive, *node, str(boost::format("%s\\%s") % _cachedName % temp.get()));
+		Key newKey(_hive, *node, tfm::format("%s\\%s", _cachedName, temp.get()));
 
 		children.push_back(std::move(newKey));
 	}
@@ -262,7 +260,7 @@ bool Key::SetValue(const std::string &name, int32_t value)
 {
 	if (!Exists())
 	{
-		logger.Warn("SetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("SetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -270,11 +268,11 @@ bool Key::SetValue(const std::string &name, int32_t value)
 
 	if (hivex_node_set_value(_hive, _node, &newValue, 0) == 0)
 	{
-		logger.Debug("SetValue %s\\%s: %i", _cachedName.c_str(), name.c_str(), value);
+		logger.Debug("SetValue %s\\%s: %i", _cachedName, name, value);
 		return true;
 	}
 
-	logger.Error("SetValue %s\\%s: %i failed", _cachedName.c_str(), name.c_str(), value);
+	logger.Error("SetValue %s\\%s: %i failed", _cachedName, name, value);
 	return false;
 }
 
@@ -283,7 +281,7 @@ bool Key::SetValue(const std::string &name, const std::string &value)
 {
 	if (!Exists())
 	{
-		logger.Warn("SetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("SetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -292,11 +290,11 @@ bool Key::SetValue(const std::string &name, const std::string &value)
 
 	if (hivex_node_set_value(_hive, _node, &newValue, 0) == 0)
 	{
-		logger.Debug("SetValue %s\\%s: %s", _cachedName.c_str(), name.c_str(), value.c_str());
+		logger.Debug("SetValue %s\\%s: %s", _cachedName, name, value);
 		return true;
 	}
 
-	logger.Error("SetValue %s\\%s: %s failed", _cachedName.c_str(), name.c_str(), value.c_str());
+	logger.Error("SetValue %s\\%s: %s failed", _cachedName, name, value);
 	return false;
 }
 
@@ -304,7 +302,7 @@ bool Key::SetValue(const std::string &name, const std::vector<std::string> &valu
 {
 	if (!Exists())
 	{
-		logger.Warn("SetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("SetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -322,11 +320,11 @@ bool Key::SetValue(const std::string &name, const std::vector<std::string> &valu
 	uint32_t count = 0;
 	for (const auto &value : values)
 	{
-		logger.Debug("SetValue %s\\%s[%u]: %s%s", _cachedName.c_str(), name.c_str(), count++, value.c_str(), result ? "" : "failed");
+		logger.Debug("SetValue %s\\%s[%u]: %s%s", _cachedName, name, count++, value, result ? "" : "failed");
 	}
 	if (count == 0)
 	{
-		logger.Debug("SetValue %s\\%s: <empty>", _cachedName.c_str(), name.c_str());
+		logger.Debug("SetValue %s\\%s: <empty>", _cachedName, name);
 	}
 	return result;
 }
@@ -335,17 +333,17 @@ bool Key::HasValue(const string &name) const
 {
 	if (!Exists())
 	{
-		logger.Warn("HasValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("HasValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
 	if (hivex_node_get_value(_hive, _node, name.c_str()) == 0)
 	{
-		logger.Debug("HasValue: %s\\%s found", _cachedName.c_str(), name.c_str());
+		logger.Debug("HasValue: %s\\%s found", _cachedName, name);
 		return true;
 	}
 
-	logger.Error("HasValue: %s\\%s not found", _cachedName.c_str(), name.c_str());
+	logger.Error("HasValue: %s\\%s not found", _cachedName, name);
 	return false;
 }
 
@@ -353,7 +351,7 @@ bool Key::GetValue(const std::string &name, int32_t &result)
 {
 	if (!Exists())
 	{
-		logger.Warn("GetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("GetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -363,11 +361,11 @@ bool Key::GetValue(const std::string &name, int32_t &result)
 	if (value != 0 && hivex_value_type(_hive, value, &type, &size) == 0 && type == hive_t_REG_DWORD)
 	{
 		result = hivex_value_dword(_hive, value);
-		logger.Debug("GetValue %s\\%s: %d", _cachedName.c_str(), name.c_str(), result);
+		logger.Debug("GetValue %s\\%s: %d", _cachedName, name, result);
 		return true;
 	}
 
-	logger.Error("GetValue: value %s\\%s not found", _cachedName.c_str(), name.c_str());
+	logger.Error("GetValue: value %s\\%s not found", _cachedName, name);
 	return false;
 }
 
@@ -375,7 +373,7 @@ bool Key::GetValue(const std::string &name, std::string &result)
 {
 	if (!Exists())
 	{
-		logger.Warn("GetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("GetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -388,12 +386,12 @@ bool Key::GetValue(const std::string &name, std::string &result)
 		if (contents != nullptr)
 		{
 			result = contents.get();
-			logger.Debug("GetValue %s\\%s: %s", _cachedName.c_str(), name.c_str(), contents.get());
+			logger.Debug("GetValue %s\\%s: %s", _cachedName, name, contents.get());
 			return true;
 		}
 	}
 
-	logger.Debug("GetValue: value %s\\%s not found", _cachedName.c_str(), name.c_str());
+	logger.Debug("GetValue: value %s\\%s not found", _cachedName, name);
 	return false;
 }
 
@@ -401,7 +399,7 @@ bool Key::GetValue(const std::string &name, std::vector<std::string> &result)
 {
 	if (!Exists())
 	{
-		logger.Warn("GetValue: parent key %s not found", _cachedName.c_str());
+		logger.Warn("GetValue: parent key %s not found", _cachedName);
 		return false;
 	}
 
@@ -419,17 +417,17 @@ bool Key::GetValue(const std::string &name, std::vector<std::string> &result)
 			{
 				auto str = make_cunique(*ptr);
 				result.emplace_back(str.get());
-				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName.c_str(), name.c_str(), count++, str.get());
+				logger.Debug("GetValue %s\\%s[%u]: %s", _cachedName, name, count++, str.get());
 			}
 			if (result.empty())
 			{
-				logger.Debug("GetValue %s\\%s: <empty>", _cachedName.c_str(), name.c_str());
+				logger.Debug("GetValue %s\\%s: <empty>", _cachedName, name);
 			}
 			return true;
 		}
 	}
 
-	logger.Debug("GetValue: value %s\\%s not found", _cachedName.c_str(), name.c_str());
+	logger.Debug("GetValue: value %s\\%s not found", _cachedName, name);
 	return false;
 }
 
@@ -437,29 +435,29 @@ bool Key::Delete()
 {
 	if (!Exists())
 	{
-		logger.Warn("GetValue: key %s not found", _cachedName.c_str());
+		logger.Warn("GetValue: key %s not found", _cachedName);
 		return false;
 	}
 
 	if (hivex_node_delete_child(_hive, _node) == 0)
 	{
-		logger.Debug("Delete: %s", _cachedName.c_str());
+		logger.Debug("Delete: %s", _cachedName);
 		return true;
 	}
 
-	logger.Error("Delete: %s failed", _cachedName.c_str());
+	logger.Error("Delete: %s failed", _cachedName);
 	return false;
 }
 
 vector<UntypedRegistryValue> Key::GetValues()
 {
-	logger.Debug("GetValues: %s", _cachedName.c_str());
+	logger.Debug("GetValues: %s", _cachedName);
 
 	vector<UntypedRegistryValue> values;
 
 	if (!Exists())
 	{
-		logger.Warn("GetValues: key %s does not exist!", _cachedName.c_str());
+		logger.Warn("GetValues: key %s does not exist!", _cachedName);
 		return values;
 	}
 
@@ -484,11 +482,11 @@ vector<UntypedRegistryValue> Key::GetValues()
 
 bool Key::SetValues(const std::vector<UntypedRegistryValue> &values)
 {
-	logger.Debug("GetValues: %s", _cachedName.c_str());
+	logger.Debug("GetValues: %s", _cachedName);
 
 	if (!Exists())
 	{
-		logger.Warn("SetValues: key %s does not exist!", _cachedName.c_str());
+		logger.Warn("SetValues: key %s does not exist!", _cachedName);
 		return false;
 	}
 
